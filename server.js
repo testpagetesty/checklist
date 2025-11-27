@@ -73,7 +73,8 @@ app.post('/api/analyze', async (req, res) => {
         const targetPath = folderPath || __dirname;
         
         // Сохраняем базовый путь для использования в других маршрутах
-        currentBasePath = path.resolve(targetPath);
+        // Нормализуем путь для правильной работы на Windows
+        currentBasePath = path.normalize(path.resolve(targetPath));
         
         // Используем Node.js скрипт вместо PowerShell
         const { checkSites, generateReport } = require('./check_sites_node.js');
@@ -82,15 +83,19 @@ app.post('/api/analyze', async (req, res) => {
         const results = await checkSites(targetPath);
         
         // Генерируем отчет
-        const reportPath = path.join(targetPath, 'structure_report.html');
-        const stats = await generateReport(results, reportPath, targetPath);
+        // Нормализуем путь для правильной работы на Windows
+        const normalizedTargetPath = path.normalize(path.resolve(targetPath));
+        const reportPath = path.join(normalizedTargetPath, 'structure_report.html');
+        const stats = await generateReport(results, reportPath, normalizedTargetPath);
         
         // Читаем отчет для отправки
         let report = '';
         try {
-            report = await fs.readFile(reportPath, 'utf8');
+            const normalizedReportPath = path.normalize(reportPath);
+            report = await fs.readFile(normalizedReportPath, 'utf8');
         } catch (e) {
-            report = '<p>Отчет еще не создан</p>';
+            console.error('Error reading report:', e);
+            report = '<p>Отчет еще не создан. Ошибка: ' + e.message + '</p>';
         }
         
         res.json({
@@ -125,11 +130,23 @@ app.get('/api/report', async (req, res) => {
     try {
         // Используем сохраненный базовый путь или путь из query параметра
         const basePath = req.query.basePath ? decodeURIComponent(req.query.basePath) : currentBasePath;
-        const reportPath = path.join(basePath, 'structure_report.html');
-        const report = await fs.readFile(reportPath, 'utf8');
+        // Нормализуем путь для правильной работы на Windows
+        const normalizedBasePath = path.normalize(path.resolve(basePath));
+        const reportPath = path.join(normalizedBasePath, 'structure_report.html');
+        const normalizedReportPath = path.normalize(reportPath);
+        
+        // Проверяем существование файла перед чтением
+        try {
+            await fs.access(normalizedReportPath);
+        } catch (accessError) {
+            return res.status(404).send('<p>Отчет не найден. Запустите анализ сначала.</p>');
+        }
+        
+        const report = await fs.readFile(normalizedReportPath, 'utf8');
         res.send(report);
     } catch (error) {
-        res.status(404).send('<p>Отчет не найден. Запустите анализ сначала.</p>');
+        console.error('Error reading report:', error);
+        res.status(404).send('<p>Отчет не найден. Ошибка: ' + error.message + '</p>');
     }
 });
 

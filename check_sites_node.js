@@ -1527,8 +1527,11 @@ async function checkSites(basePath) {
 async function generateReport(results, outputPath, basePath) {
     const currentDate = new Date().toLocaleString('ru-RU');
     
+    // Нормализуем путь для правильной работы на Windows
+    const normalizedOutputPath = path.normalize(outputPath);
+    
     // Получаем базовый путь для относительных URL
-    const reportDir = path.dirname(outputPath);
+    const reportDir = path.dirname(normalizedOutputPath);
     
     // Определяем, открыт ли отчет через сервер или как файл
     // Всегда используем режим сервера, если basePath передан (отчет открыт через /api/report)
@@ -2134,7 +2137,18 @@ async function generateReport(results, outputPath, basePath) {
     </script>
 </body></html>`;
     
-    await fs.writeFile(outputPath, html, 'utf8');
+    // Убеждаемся, что директория существует перед записью файла
+    try {
+        await fs.mkdir(reportDir, { recursive: true });
+    } catch (err) {
+        // Если директория уже существует, это нормально
+        if (err.code !== 'EEXIST') {
+            throw err;
+        }
+    }
+    
+    // Записываем файл используя нормализованный путь
+    await fs.writeFile(normalizedOutputPath, html, 'utf8');
     
     // Статистика для консоли
     const existing = results.filter(r => r.Exists).length;
