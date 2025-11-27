@@ -1,0 +1,14 @@
+{
+  "name": "checklist-client-agent",
+  "version": "1.0.0",
+  "description": "Клиентский агент для доступа к локальным файлам",
+  "main": "client-agent.js",
+  "scripts": {
+    "start": "node client-agent.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "localtunnel": "^2.0.2"
+  }
+}
+

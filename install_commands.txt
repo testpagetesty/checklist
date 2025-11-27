@@ -1,0 +1,59 @@
+# Скопируйте и выполните эти команды на сервере
+# (через панель VMmanager или PuTTY)
+
+# ============================================
+# УСТАНОВКА CHECKLIST НА СЕРВЕР
+# ============================================
+
+# 1. Обновление системы
+apt update && apt upgrade -y
+
+# 2. Установка необходимых пакетов
+apt-get install -y curl wget git build-essential
+
+# 3. Установка Node.js 20.x
+curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+apt-get install -y nodejs
+
+# 4. Проверка установки Node.js
+node --version
+npm --version
+
+# 5. Установка PM2 для постоянной работы
+npm install -g pm2
+
+# 6. Создание директории для проекта
+mkdir -p /var/www
+cd /var/www
+
+# 7. Клонирование проекта из GitHub
+git clone https://github.com/testpagetesty/checklist.git
+cd checklist
+
+# 8. Установка зависимостей проекта
+npm install
+
+# 9. Запуск приложения через PM2
+pm2 start server.js --name checklist
+pm2 save
+
+# 10. Настройка автозапуска PM2
+pm2 startup
+# ВАЖНО: Выполните команду, которую выдаст PM2 (она будет начинаться с sudo)
+
+# 11. Открытие порта 3000 в файрволе
+ufw allow 3000/tcp || echo "Проверьте файрвол вручную"
+
+# 12. Проверка статуса
+pm2 status
+
+# ============================================
+# ГОТОВО! Приложение доступно по адресу:
+# http://45.15.126.22:3000
+# ============================================
+
+# Управление приложением:
+# pm2 logs checklist    - просмотр логов
+# pm2 restart checklist - перезапуск
+# pm2 stop checklist    - остановка
+

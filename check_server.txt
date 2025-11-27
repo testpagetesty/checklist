@@ -1,0 +1,26 @@
+# Команды для проверки работы сервера
+# Выполните их в PuTTY на сервере по очереди
+
+# 1. Проверить логи приложения
+pm2 logs checklist --lines 50
+
+# 2. Проверить на каком порту слушает приложение
+netstat -tulpn | grep 3000
+
+# Или
+ss -tulpn | grep 3000
+
+# 3. Проверить файрвол (CentOS/AlmaLinux)
+firewall-cmd --list-ports
+firewall-cmd --list-all
+
+# 4. Открыть порт 3000 в файрволе (если он закрыт)
+firewall-cmd --permanent --add-port=3000/tcp
+firewall-cmd --reload
+
+# 5. Проверить статус PM2
+pm2 status
+
+# 6. Перезапустить приложение если нужно
+pm2 restart checklist
+

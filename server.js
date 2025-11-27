@@ -42,6 +42,9 @@ let currentBasePath = __dirname;
 // Хранилище для последнего отчета в памяти (для работы на read-only файловой системе)
 let lastReportHtml = null;
 
+// Хранилище для активных клиент-агентов (URL агента -> активен)
+const activeAgents = new Map();
+
 // Маршрут для раздачи файлов из папок сайтов (для просмотра в модальном окне)
 app.get('/sites/:siteName/*', (req, res, next) => {
     const siteName = decodeURIComponent(req.params.siteName);
@@ -96,51 +99,112 @@ app.get('/api/sites', async (req, res) => {
     }
 });
 
+// API: Регистрация клиент-агента
+app.post('/api/register-agent', (req, res) => {
+    const { agentUrl } = req.body;
+    if (agentUrl) {
+        activeAgents.set(agentUrl, { url: agentUrl, lastSeen: Date.now() });
+        console.log(`✅ Клиент-агент зарегистрирован: ${agentUrl}`);
+        res.json({ success: true });
+    } else {
+        res.status(400).json({ error: 'URL агента не указан' });
+    }
+});
+
+// Функция для работы с файлами через агента
+async function accessViaAgent(agentUrl, folderPath) {
+    try {
+        const response = await fetch(`${agentUrl}/api/access`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ folderPath })
+        });
+        return await response.json();
+    } catch (error) {
+        throw new Error(`Не удалось подключиться к агенту: ${error.message}`);
+    }
+}
+
 // API: Запустить проверку сайтов
 app.post('/api/analyze', async (req, res) => {
     try {
-        const { folderPath } = req.body;
+        const { folderPath, agentUrl } = req.body;
         
         console.log('📁 Original folderPath:', folderPath);
         console.log('🌐 Is server environment:', isServerEnvironment);
+        console.log('🔌 Agent URL:', agentUrl || 'не указан');
         console.log('📂 __dirname:', __dirname);
         console.log('💻 process.cwd():', process.cwd());
+        
+        // Если указан Windows-путь И есть агент - работаем через агента
+        if (folderPath && isWindowsAbsolutePath(folderPath)) {
+            if (agentUrl && activeAgents.has(agentUrl)) {
+                console.log('✅ Используем клиент-агент для доступа к локальным файлам');
+                // Проверяем доступность через агента
+                try {
+                    const agentResponse = await accessViaAgent(agentUrl, folderPath);
+                    if (!agentResponse.accessible) {
+                        return res.json({
+                            success: false,
+                            error: `Путь недоступен через агент: ${agentResponse.error}`,
+                            output: '',
+                            report: `<div style="padding: 20px; background: #f8d7da; border: 1px solid #dc3545; border-radius: 5px; margin: 20px;">
+                                <h3>❌ Путь недоступен</h3>
+                                <p><strong>Путь:</strong> ${folderPath}</p>
+                                <p><strong>Ошибка:</strong> ${agentResponse.error}</p>
+                                <p>Убедитесь, что клиент-агент запущен и путь указан правильно.</p>
+                            </div>`,
+                            stats: { total: 0, existing: 0, withMain: 0, withContact: 0, withFavicon: 0, withThankYou: 0, withImages5: 0, withMap: 0, withForm: 0 }
+                        });
+                    }
+                    // Сохраняем информацию для использования в check_sites_node.js
+                    currentBasePath = { type: 'agent', agentUrl, folderPath };
+                    // Используем специальную версию checkSites для работы через агента
+                    const { checkSitesViaAgent, generateReport } = require('./check_sites_node.js');
+                    const results = await checkSitesViaAgent(agentUrl, folderPath);
+                    // ... продолжаем как обычно
+                    const reportPath = path.join(__dirname, 'structure_report.html');
+                    const stats = await generateReport(results, reportPath, folderPath, true, agentUrl);
+                    // ... остальной код генерации отчета
+                } catch (agentError) {
+                    return res.json({
+                        success: false,
+                        error: `Ошибка при работе с агентом: ${agentError.message}`,
+                        output: '',
+                        report: `<div style="padding: 20px; background: #f8d7da; border: 1px solid #dc3545; border-radius: 5px; margin: 20px;">
+                            <h3>❌ Ошибка подключения к агенту</h3>
+                            <p>${agentError.message}</p>
+                            <p>Убедитесь, что клиент-агент запущен на вашем ПК.</p>
+                        </div>`,
+                        stats: { total: 0, existing: 0, withMain: 0, withContact: 0, withFavicon: 0, withThankYou: 0, withImages5: 0, withMap: 0, withForm: 0 }
+                    });
+                }
+            } else {
+                // Нет агента - просим его установить
+                return res.json({
+                    success: false,
+                    error: 'Для проверки локальных файлов нужен клиент-агент',
+                    output: '',
+                    report: `<div style="padding: 20px; background: #fff3cd; border: 1px solid #ffc107; border-radius: 5px; margin: 20px;">
+                        <h3>⚠️ Нужен клиент-агент</h3>
+                        <p>Для проверки локальных файлов с вашего ПК (${folderPath}) необходимо запустить клиент-агент.</p>
+                        <p><strong>Инструкция:</strong></p>
+                        <ol>
+                            <li>Скачайте и установите клиент-агент (файлы client-agent.js и package.json)</li>
+                            <li>Установите зависимости: <code>npm install</code></li>
+                            <li>Запустите агент: <code>node client-agent.js</code></li>
+                            <li>Скопируйте URL туннеля, который покажет агент</li>
+                            <li>Укажите этот URL в поле "URL клиент-агента" на этой странице</li>
+                        </ol>
+                    </div>`,
+                    stats: { total: 0, existing: 0, withMain: 0, withContact: 0, withFavicon: 0, withThankYou: 0, withImages5: 0, withMap: 0, withForm: 0 }
+                });
+            }
+        }
         
         // Безопасно обрабатываем путь (на сервере Windows-пути не работают)
         const targetPath = safeResolvePath(folderPath, __dirname);
         console.log('✅ Resolved targetPath:', targetPath);
-        
-        // ВАЖНО: На Vercel нельзя получить доступ к локальным путям пользователя
-        // Если указан абсолютный Windows-путь, предупреждаем пользователя
-        if (isServerEnvironment && folderPath && isWindowsAbsolutePath(folderPath)) {
-            const warning = `⚠️ На сервере недоступны локальные пути с вашего ПК. ` +
-                          `Используются только файлы из проекта. ` +
-                          `Для проверки локальных папок запустите сервер локально.`;
-            console.warn(warning);
-            
-            return res.json({
-                success: false,
-                error: warning,
-                output: '',
-                report: `<div style="padding: 20px; background: #fff3cd; border: 1px solid #ffc107; border-radius: 5px; margin: 20px;">
-                    <h3>⚠️ Ограничение серверного окружения</h3>
-                    <p>На сервере Vercel невозможно получить доступ к локальным путям вашего компьютера (например, ${folderPath}).</p>
-                    <p><strong>Решение:</strong> Для проверки локальных папок запустите сервер локально на вашем ПК.</p>
-                    <p>Если вы хотите проверить сайты, которые находятся в проекте на GitHub, используйте относительный путь от корня проекта.</p>
-                </div>`,
-                stats: {
-                    total: 0,
-                    existing: 0,
-                    withMain: 0,
-                    withContact: 0,
-                    withFavicon: 0,
-                    withThankYou: 0,
-                    withImages5: 0,
-                    withMap: 0,
-                    withForm: 0
-                }
-            });
-        }
         
         // Проверяем доступность пути
         try {

@@ -228,13 +228,24 @@
 
         <div class="main-panel">
             <div class="folder-selector">
+                <label>🔌 URL клиент-агента (для проверки локальных файлов):</label>
+                <div class="folder-path">
+                    <input type="text" id="agentUrl" placeholder="https://xxx.loca.lt (оставьте пустым если проверяете файлы на сервере)" value="">
+                </div>
+                <div class="info-box" style="margin-bottom: 15px;">
+                    💡 <strong>Для проверки локальных файлов:</strong> Запустите client-agent.js на вашем ПК и вставьте URL туннеля сюда.
+                </div>
+                
                 <label>📁 Папка для анализа:</label>
                 <div class="folder-path">
-                    <input type="text" id="folderPath" placeholder="Путь к папке с сайтами (оставьте пустым для текущей папки)" value="">
+                    <input type="text" id="folderPath" placeholder="Путь к папке с сайтами (C:\Users\... или /var/www/...)" value="">
                 </div>
                 <div class="info-box">
-                    💡 <strong>Информация:</strong> Оставьте поле пустым, чтобы проанализировать текущую папку (дизайнер25), 
-                    или укажите путь к другой папке с сайтами.
+                    💡 <strong>Информация:</strong> 
+                    <ul style="margin: 5px 0; padding-left: 20px;">
+                        <li>Для локальных файлов: укажите Windows путь (например: <code>C:\Users\...\Downloads\25</code>) и URL агента выше</li>
+                        <li>Для файлов на сервере: оставьте URL агента пустым и укажите Linux путь (например: <code>/var/www/sites</code>)</li>
+                    </ul>
                 </div>
             </div>
 
@@ -314,6 +325,7 @@
             logOutput.textContent = '';
             
             const folderPath = document.getElementById('folderPath').value.trim();
+            const agentUrl = document.getElementById('agentUrl').value.trim();
             // Сохраняем базовый путь для использования в других функциях
             currentBasePath = folderPath || null;
             
@@ -326,7 +338,7 @@
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ folderPath: folderPath || null })
+                    body: JSON.stringify({ folderPath: folderPath || null, agentUrl: agentUrl || null })
                 });
                 
                 updateProgress(50);
