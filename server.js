@@ -1,10 +1,7 @@
 const express = require('express');
 const path = require('path');
 const fs = require('fs').promises;
-const fsSync = require('fs');
 const os = require('os');
-const multer = require('multer');
-const AdmZip = require('adm-zip');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -35,20 +32,6 @@ function safeResolvePath(inputPath, fallbackDir = __dirname) {
 }
 
 app.use(express.json());
-
-// Настройка multer для загрузки файлов
-const upload = multer({ 
-    dest: path.join(os.tmpdir(), 'site-uploads'),
-    limits: { 
-        fileSize: 100 * 1024 * 1024 // 100MB максимум
-    }
-});
-
-// Создаем директорию для загрузок, если её нет
-const uploadDir = path.join(os.tmpdir(), 'site-uploads');
-if (!fsSync.existsSync(uploadDir)) {
-    fsSync.mkdirSync(uploadDir, { recursive: true });
-}
 
 // Статические файлы из корня
 app.use(express.static(__dirname));
@@ -285,166 +268,6 @@ app.post('/api/analyze', async (req, res) => {
             }
         });
     } catch (error) {
-        res.status(500).json({
-            success: false,
-            error: error.message,
-            output: '',
-            stderr: error.stack || ''
-        });
-    }
-});
-
-// API: Загрузить ZIP архив с сайтами и обработать
-app.post('/api/upload', upload.single('sitesZip'), async (req, res) => {
-    let extractedPath = null;
-    
-    try {
-        if (!req.file) {
-            return res.status(400).json({
-                success: false,
-                error: 'Файл не был загружен',
-                output: ''
-            });
-        }
-        
-        console.log('📦 File uploaded:', req.file.originalname, 'Size:', req.file.size);
-        
-        // Создаем уникальную директорию для распаковки
-        const extractDir = path.join(uploadDir, `extracted-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`);
-        extractedPath = extractDir;
-        
-        await fs.mkdir(extractDir, { recursive: true });
-        console.log('📂 Extract directory created:', extractDir);
-        
-        // Распаковываем ZIP архив
-        const zip = new AdmZip(req.file.path);
-        zip.extractAllTo(extractDir, true);
-        console.log('✅ ZIP extracted successfully');
-        
-        // Удаляем временный файл
-        try {
-            await fs.unlink(req.file.path);
-        } catch (e) {
-            console.warn('Could not delete temp file:', e.message);
-        }
-        
-        // Используем Node.js скрипт для анализа
-        const { checkSites, generateReport } = require('./check_sites_node.js');
-        
-        // Выполняем проверку
-        console.log('🔍 Starting checkSites for uploaded files:', extractDir);
-        const results = await checkSites(extractDir);
-        console.log('📊 Found results:', results.length);
-        
-        if (!results || results.length === 0) {
-            // Очищаем директорию
-            try {
-                await fs.rm(extractDir, { recursive: true, force: true });
-            } catch (e) {
-                console.warn('Could not cleanup:', e.message);
-            }
-            
-            return res.json({
-                success: true,
-                output: 'Загружено, но сайты не найдены в архиве.\nУбедитесь, что в архиве есть папки с сайтами.',
-                error: '',
-                report: `<div style="padding: 20px; background: #fff3cd; border: 1px solid #ffc107; border-radius: 5px; margin: 20px;">
-                    <h3>⚠️ Сайты не найдены</h3>
-                    <p>Архив распакован, но не найдено папок с сайтами.</p>
-                    <p><strong>Структура архива должна быть:</strong></p>
-                    <pre style="background: #1a1a1a; padding: 10px; border-radius: 5px; color: #e0e0e0;">
-sites.zip
-  ├── site1/
-  │   ├── index.html
-  │   └── ...
-  ├── site2/
-  │   ├── index.html
-  │   └── ...
-    </pre>
-                </div>`,
-                stats: {
-                    total: 0,
-                    existing: 0,
-                    withMain: 0,
-                    withContact: 0,
-                    withFavicon: 0,
-                    withThankYou: 0,
-                    withImages5: 0,
-                    withMap: 0,
-                    withForm: 0
-                }
-            });
-        }
-        
-        // Генерируем отчет
-        const reportPath = path.join(extractDir, 'structure_report.html');
-        const stats = await generateReport(results, reportPath, extractDir, isServerEnvironment);
-        
-        // Используем HTML напрямую
-        let report = stats.html || '';
-        
-        if (!report && !isServerEnvironment) {
-            try {
-                const actualPath = stats.reportPath || reportPath;
-                report = await fs.readFile(actualPath, 'utf8');
-            } catch (e) {
-                report = `<p>Отчет не создан. Ошибка: ${e.message}</p>`;
-            }
-        }
-        
-        // Сохраняем отчет в памяти
-        lastReportHtml = report;
-        currentBasePath = extractDir;
-        
-        // Запускаем очистку через 5 минут (для возможности просмотра отчета)
-        setTimeout(async () => {
-            try {
-                await fs.rm(extractDir, { recursive: true, force: true });
-                console.log('🧹 Cleaned up extracted directory:', extractDir);
-            } catch (e) {
-                console.warn('Could not cleanup:', e.message);
-            }
-        }, 5 * 60 * 1000); // 5 минут
-        
-        res.json({
-            success: true,
-            output: stats.output + `\n\n✅ Загружено из архива: ${req.file.originalname}`,
-            error: '',
-            report: report,
-            stats: {
-                total: stats.total,
-                existing: stats.existing,
-                withMain: stats.withMain,
-                withContact: stats.withContact,
-                withFavicon: stats.withFavicon,
-                withThankYou: stats.withThankYou,
-                withImages5: stats.withImages5,
-                withMap: stats.withMap,
-                withForm: stats.withForm
-            }
-        });
-        
-    } catch (error) {
-        console.error('❌ Upload error:', error);
-        
-        // Очищаем в случае ошибки
-        if (extractedPath) {
-            try {
-                await fs.rm(extractedPath, { recursive: true, force: true });
-            } catch (e) {
-                console.warn('Could not cleanup on error:', e.message);
-            }
-        }
-        
-        // Удаляем загруженный файл
-        if (req.file && req.file.path) {
-            try {
-                await fs.unlink(req.file.path);
-            } catch (e) {
-                // Игнорируем
-            }
-        }
-        
         res.status(500).json({
             success: false,
             error: error.message,

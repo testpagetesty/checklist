@@ -238,33 +238,8 @@
                 </div>
             </div>
 
-            <div class="folder-selector" style="margin-top: 25px; padding-top: 25px; border-top: 2px solid #333;">
-                <label>📦 ИЛИ загрузите ZIP архив с сайтами:</label>
-                <div class="upload-area" id="uploadArea" style="border: 2px dashed #555; border-radius: 10px; padding: 30px; text-align: center; background: rgba(42, 42, 42, 0.5); cursor: pointer; transition: all 0.3s;">
-                    <input type="file" id="zipFileInput" accept=".zip" style="display: none;" onchange="handleFileSelect(event)">
-                    <div id="uploadText">
-                        <div style="font-size: 3em; margin-bottom: 15px;">📤</div>
-                        <div style="color: #d4af37; font-weight: bold; margin-bottom: 10px;">Нажмите для выбора ZIP архива</div>
-                        <div style="color: #999; font-size: 0.9em;">или перетащите файл сюда</div>
-                        <div style="color: #666; font-size: 0.8em; margin-top: 10px;">Максимальный размер: 100 МБ</div>
-                    </div>
-                    <div id="fileInfo" style="display: none; color: #4caf50;">
-                        <div style="font-size: 2em; margin-bottom: 10px;">✅</div>
-                        <div id="fileName" style="font-weight: bold; margin-bottom: 5px;"></div>
-                        <div id="fileSize" style="font-size: 0.9em; color: #999;"></div>
-                        <button onclick="document.getElementById('zipFileInput').value = ''; document.getElementById('uploadText').style.display = 'block'; document.getElementById('fileInfo').style.display = 'none';" style="margin-top: 10px; padding: 5px 15px; background: #f44336; border: none; border-radius: 5px; color: white; cursor: pointer;">Удалить</button>
-                    </div>
-                </div>
-                <div class="info-box" style="margin-top: 15px;">
-                    💡 <strong>Как использовать:</strong> Заархивируйте папки с сайтами в ZIP файл и загрузите его. 
-                    Система автоматически распакует архив и проверит все сайты. 
-                    <strong>Отлично работает на сервере Vercel!</strong>
-                </div>
-            </div>
-
             <div class="action-buttons">
                 <button id="analyzeBtn" onclick="startAnalysis()">🚀 Запустить анализ</button>
-                <button id="uploadBtn" onclick="uploadAndAnalyze()" style="display: none;">📤 Загрузить и проанализировать</button>
                 <button class="btn-secondary" id="viewReportBtn" onclick="viewReport()" disabled>📊 Просмотреть отчет</button>
                 <button class="btn-secondary" onclick="refreshSites()">🔄 Обновить список</button>
             </div>
@@ -316,7 +291,6 @@
     <script>
         let isAnalyzing = false;
         let currentBasePath = null; // Сохраняем текущий базовый путь
-        let selectedFile = null;
 
         async function startAnalysis() {
             if (isAnalyzing) return;
@@ -401,120 +375,6 @@
             }
         }
 
-        // Обработка выбора файла
-        function handleFileSelect(event) {
-            const file = event.target.files[0];
-            if (file) {
-                if (!file.name.endsWith('.zip')) {
-                    alert('Пожалуйста, выберите ZIP файл');
-                    event.target.value = '';
-                    return;
-                }
-                
-                if (file.size > 100 * 1024 * 1024) {
-                    alert('Файл слишком большой! Максимальный размер: 100 МБ');
-                    event.target.value = '';
-                    return;
-                }
-                
-                selectedFile = file;
-                document.getElementById('uploadText').style.display = 'none';
-                document.getElementById('fileInfo').style.display = 'block';
-                document.getElementById('fileName').textContent = file.name;
-                document.getElementById('fileSize').textContent = formatFileSize(file.size);
-                document.getElementById('uploadBtn').style.display = 'inline-block';
-            }
-        }
-
-        function formatFileSize(bytes) {
-            if (bytes === 0) return '0 Bytes';
-            const k = 1024;
-            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-            const i = Math.floor(Math.log(bytes) / Math.log(k));
-            return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
-        }
-
-        // Загрузка и анализ ZIP архива
-        async function uploadAndAnalyze() {
-            if (!selectedFile || isAnalyzing) return;
-            
-            isAnalyzing = true;
-            const btn = document.getElementById('uploadBtn');
-            const analyzeBtn = document.getElementById('analyzeBtn');
-            const viewBtn = document.getElementById('viewReportBtn');
-            const progressSection = document.getElementById('progressSection');
-            const status = document.getElementById('status');
-            const logOutput = document.getElementById('logOutput');
-            const statsGrid = document.getElementById('statsGrid');
-            
-            btn.disabled = true;
-            analyzeBtn.disabled = true;
-            viewBtn.disabled = true;
-            progressSection.classList.add('active');
-            statsGrid.style.display = 'none';
-            document.getElementById('reportSection').classList.remove('active');
-            
-            status.className = 'status info';
-            status.textContent = '📤 Загрузка файла...';
-            logOutput.textContent = '';
-            
-            const formData = new FormData();
-            formData.append('sitesZip', selectedFile);
-            
-            try {
-                updateProgress(10);
-                status.textContent = '⏳ Загрузка архива на сервер...';
-                
-                const response = await fetch('/api/upload', {
-                    method: 'POST',
-                    body: formData
-                });
-                
-                updateProgress(50);
-                status.textContent = '⏳ Распаковка и анализ...';
-                
-                const data = await response.json();
-                
-                if (data.success) {
-                    updateProgress(100);
-                    status.className = 'status success';
-                    status.textContent = '✅ Анализ завершен успешно!';
-                    
-                    logOutput.textContent = data.output || 'Анализ выполнен';
-                    
-                    if (data.stats) {
-                        document.getElementById('totalSites').textContent = data.stats.total || 0;
-                        document.getElementById('foundSites').textContent = data.stats.existing || 0;
-                        document.getElementById('withMainPage').textContent = data.stats.withMain || 0;
-                        document.getElementById('withContact').textContent = data.stats.withContact || 0;
-                        document.getElementById('withFavicon').textContent = data.stats.withFavicon || 0;
-                        document.getElementById('withThankYou').textContent = data.stats.withThankYou || 0;
-                    }
-                    
-                    viewBtn.disabled = false;
-                    statsGrid.style.display = 'grid';
-                    
-                    // Автоматически показываем отчет
-                    setTimeout(() => {
-                        viewReport();
-                    }, 1000);
-                } else {
-                    status.className = 'status error';
-                    status.textContent = '❌ Ошибка при загрузке или анализе';
-                    logOutput.textContent = data.error || data.stderr || 'Неизвестная ошибка';
-                }
-            } catch (error) {
-                status.className = 'status error';
-                status.textContent = '❌ Ошибка при загрузке файла';
-                logOutput.textContent = error.message;
-            } finally {
-                btn.disabled = false;
-                analyzeBtn.disabled = false;
-                isAnalyzing = false;
-            }
-        }
-
-
         function updateProgress(percent) {
             const progressFill = document.getElementById('progressFill');
             progressFill.style.width = percent + '%';
@@ -575,52 +435,9 @@
             }
         }
 
-        // Инициализация drag & drop для загрузки
+        // Автоматическая проверка при загрузке
         window.addEventListener('load', () => {
             refreshSites();
-            
-            // Drag & Drop для загрузки (повторная инициализация для безопасности)
-            const uploadArea = document.getElementById('uploadArea');
-            const zipFileInput = document.getElementById('zipFileInput');
-            
-            if (uploadArea && !uploadArea.hasAttribute('data-drag-initialized')) {
-                uploadArea.setAttribute('data-drag-initialized', 'true');
-                
-                uploadArea.addEventListener('click', () => {
-                    zipFileInput.click();
-                });
-                
-                uploadArea.addEventListener('dragover', (e) => {
-                    e.preventDefault();
-                    uploadArea.style.borderColor = '#d4af37';
-                    uploadArea.style.background = 'rgba(212, 175, 55, 0.1)';
-                });
-                
-                uploadArea.addEventListener('dragleave', () => {
-                    uploadArea.style.borderColor = '#555';
-                    uploadArea.style.background = 'rgba(42, 42, 42, 0.5)';
-                });
-                
-                uploadArea.addEventListener('drop', (e) => {
-                    e.preventDefault();
-                    uploadArea.style.borderColor = '#555';
-                    uploadArea.style.background = 'rgba(42, 42, 42, 0.5)';
-                    
-                    const files = e.dataTransfer.files;
-                    if (files.length > 0) {
-                        const file = files[0];
-                        if (file.name.endsWith('.zip')) {
-                            // Создаем DataTransfer для установки файла в input
-                            const dt = new DataTransfer();
-                            dt.items.add(file);
-                            zipFileInput.files = dt.files;
-                            handleFileSelect({ target: zipFileInput });
-                        } else {
-                            alert('Пожалуйста, перетащите ZIP файл');
-                        }
-                    }
-                });
-            }
         });
 
         // Обработчик сообщений от iframe для открытия мобильного просмотра
