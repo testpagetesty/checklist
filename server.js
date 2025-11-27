@@ -101,8 +101,78 @@ app.post('/api/analyze', async (req, res) => {
     try {
         const { folderPath } = req.body;
         
+        console.log('📁 Original folderPath:', folderPath);
+        console.log('🌐 Is server environment:', isServerEnvironment);
+        console.log('📂 __dirname:', __dirname);
+        console.log('💻 process.cwd():', process.cwd());
+        
         // Безопасно обрабатываем путь (на сервере Windows-пути не работают)
         const targetPath = safeResolvePath(folderPath, __dirname);
+        console.log('✅ Resolved targetPath:', targetPath);
+        
+        // ВАЖНО: На Vercel нельзя получить доступ к локальным путям пользователя
+        // Если указан абсолютный Windows-путь, предупреждаем пользователя
+        if (isServerEnvironment && folderPath && isWindowsAbsolutePath(folderPath)) {
+            const warning = `⚠️ На сервере недоступны локальные пути с вашего ПК. ` +
+                          `Используются только файлы из проекта. ` +
+                          `Для проверки локальных папок запустите сервер локально.`;
+            console.warn(warning);
+            
+            return res.json({
+                success: false,
+                error: warning,
+                output: '',
+                report: `<div style="padding: 20px; background: #fff3cd; border: 1px solid #ffc107; border-radius: 5px; margin: 20px;">
+                    <h3>⚠️ Ограничение серверного окружения</h3>
+                    <p>На сервере Vercel невозможно получить доступ к локальным путям вашего компьютера (например, ${folderPath}).</p>
+                    <p><strong>Решение:</strong> Для проверки локальных папок запустите сервер локально на вашем ПК.</p>
+                    <p>Если вы хотите проверить сайты, которые находятся в проекте на GitHub, используйте относительный путь от корня проекта.</p>
+                </div>`,
+                stats: {
+                    total: 0,
+                    existing: 0,
+                    withMain: 0,
+                    withContact: 0,
+                    withFavicon: 0,
+                    withThankYou: 0,
+                    withImages5: 0,
+                    withMap: 0,
+                    withForm: 0
+                }
+            });
+        }
+        
+        // Проверяем доступность пути
+        try {
+            await fs.access(targetPath);
+            console.log('✅ Path is accessible:', targetPath);
+        } catch (accessError) {
+            const errorMsg = `Путь недоступен: ${targetPath}. Ошибка: ${accessError.message}`;
+            console.error('❌', errorMsg);
+            
+            return res.json({
+                success: false,
+                error: errorMsg,
+                output: '',
+                report: `<div style="padding: 20px; background: #f8d7da; border: 1px solid #dc3545; border-radius: 5px; margin: 20px;">
+                    <h3>❌ Путь недоступен</h3>
+                    <p><strong>Путь:</strong> ${targetPath}</p>
+                    <p><strong>Ошибка:</strong> ${accessError.message}</p>
+                    ${isServerEnvironment ? '<p><strong>Примечание:</strong> На сервере Vercel недоступны локальные пути с вашего компьютера. Используйте относительные пути от корня проекта.</p>' : '<p>Проверьте, что путь указан правильно и у приложения есть права доступа к этой директории.</p>'}
+                </div>`,
+                stats: {
+                    total: 0,
+                    existing: 0,
+                    withMain: 0,
+                    withContact: 0,
+                    withFavicon: 0,
+                    withThankYou: 0,
+                    withImages5: 0,
+                    withMap: 0,
+                    withForm: 0
+                }
+            });
+        }
         
         // Сохраняем базовый путь для использования в других маршрутах
         currentBasePath = targetPath;
@@ -111,23 +181,69 @@ app.post('/api/analyze', async (req, res) => {
         const { checkSites, generateReport } = require('./check_sites_node.js');
         
         // Выполняем проверку
+        console.log('🔍 Starting checkSites for path:', targetPath);
         const results = await checkSites(targetPath);
+        console.log('📊 Found results:', results.length);
+        console.log('📋 Results sample:', results.slice(0, 3).map(r => ({ Site: r.Site, Exists: r.Exists })));
+        
+        if (!results || results.length === 0) {
+            const message = `Не найдено сайтов в указанной папке: ${targetPath}`;
+            console.warn('⚠️', message);
+            
+            return res.json({
+                success: true,
+                output: message + '\nПроверьте, что путь указан правильно и содержит папки с сайтами.',
+                error: '',
+                report: `<div style="padding: 20px; background: #f8d7da; border: 1px solid #dc3545; border-radius: 5px; margin: 20px;">
+                    <h3>⚠️ Сайты не найдены</h3>
+                    <p><strong>Путь:</strong> ${targetPath}</p>
+                    <p>Не найдено папок с сайтами в указанной директории.</p>
+                    ${isServerEnvironment ? '<p><strong>Примечание:</strong> На сервере доступны только файлы проекта. Для проверки локальных папок запустите сервер локально.</p>' : ''}
+                </div>`,
+                stats: {
+                    total: 0,
+                    existing: 0,
+                    withMain: 0,
+                    withContact: 0,
+                    withFavicon: 0,
+                    withThankYou: 0,
+                    withImages5: 0,
+                    withMap: 0,
+                    withForm: 0
+                }
+            });
+        }
         
         // Генерируем отчет - на Vercel используем skipFileWrite
         const reportPath = path.join(targetPath, 'structure_report.html');
+        console.log('📝 Generating report...');
         const stats = await generateReport(results, reportPath, targetPath, isServerEnvironment);
+        console.log('✅ Report generated. Has HTML:', !!stats.html, 'File written:', stats.fileWritten);
         
         // Используем HTML напрямую из функции, если доступен, иначе пытаемся прочитать файл
         let report = stats.html || '';
         
-        if (!report && !isServerEnvironment) {
-            // Локально пытаемся прочитать файл, если HTML не вернулся
-            try {
-                const actualPath = stats.reportPath || reportPath;
-                report = await fs.readFile(actualPath, 'utf8');
-            } catch (e) {
-                console.error('Error reading report:', e);
-                report = '<p>Отчет еще не создан. Ошибка: ' + e.message + '</p>';
+        if (!report) {
+            console.log('⚠️ HTML not in stats, trying to read file...');
+            if (!isServerEnvironment) {
+                // Локально пытаемся прочитать файл, если HTML не вернулся
+                try {
+                    const actualPath = stats.reportPath || reportPath;
+                    report = await fs.readFile(actualPath, 'utf8');
+                    console.log('✅ Report read from file:', actualPath);
+                } catch (e) {
+                    console.error('❌ Error reading report:', e);
+                    report = `<div style="padding: 20px; background: #f8d7da; border: 1px solid #dc3545; border-radius: 5px; margin: 20px;">
+                        <h3>Ошибка создания отчета</h3>
+                        <p>Отчет не был создан. Ошибка: ${e.message}</p>
+                        <p><strong>Путь:</strong> ${stats.reportPath || reportPath}</p>
+                    </div>`;
+                }
+            } else {
+                report = `<div style="padding: 20px; background: #fff3cd; border: 1px solid #ffc107; border-radius: 5px; margin: 20px;">
+                    <h3>⚠️ Отчет не был сгенерирован</h3>
+                    <p>Произошла ошибка при генерации отчета. Проверьте логи сервера.</p>
+                </div>`;
             }
         }
         
