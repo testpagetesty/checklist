@@ -1,0 +1,22 @@
+{
+  "name": "auto-test-system",
+  "version": "1.0.0",
+  "description": "Автоматическая система тестирования сайтов по чек-листу",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node auto_test_system.js"
+  },
+  "keywords": [
+    "testing",
+    "automation",
+    "qa"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "cheerio": "^1.1.2",
+    "express": "^4.21.2",
+    "puppeteer": "^22.0.0"
+  }
+}

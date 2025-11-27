@@ -1,0 +1,973 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Отчет проверки сайтов</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+        html {
+            height: 100%;
+            overflow: hidden;
+        }
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            background: #0a0a0a; 
+            color: #e0e0e0; 
+            padding: 0;
+            overflow-x: hidden;
+            overflow-y: auto;
+            height: 100%;
+            min-height: 100%;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+        .header {
+            background: #1a1a1a;
+            padding: 15px 20px;
+            border-bottom: 2px solid #2a2a2a;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-shrink: 0;
+        }
+        .header h1 {
+            color: #d4af37;
+            font-size: 1.5em;
+            margin: 0;
+        }
+        .header-info {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
+        .date-info {
+            color: #999;
+            font-size: 0.9em;
+        }
+        .content {
+            flex: 1;
+            overflow: auto;
+            padding: 20px;
+            position: relative;
+        }
+        .content.modal-open {
+            overflow: hidden !important;
+        }
+        table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            background: #1a1a1a; 
+            font-size: 0.9em;
+            min-width: 100%;
+        }
+        th { 
+            background: #2a2a2a; 
+            color: #d4af37; 
+            padding: 8px 6px; 
+            text-align: center; 
+            font-size: 0.75em; 
+            position: sticky; 
+            top: 0; 
+            z-index: 10;
+            white-space: normal;
+            line-height: 1.3;
+            vertical-align: middle;
+        }
+        td { 
+            padding: 10px 8px; 
+            border-bottom: 1px solid #333; 
+            white-space: nowrap;
+        }
+        tr:hover { background: #222; }
+        .ok { color: #4caf50; font-weight: bold; }
+        .fail { color: #f44336; font-weight: bold; }
+        .stat { text-align: center; font-weight: bold; }
+        .site-name { 
+            font-weight: bold; 
+            color: #e0e0e0; 
+            position: sticky; 
+            left: 0; 
+            background: #1a1a1a; 
+            z-index: 5;
+            padding-left: 20px;
+            padding-right: 20px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .site-favicon {
+            width: 20px;
+            height: 20px;
+            object-fit: contain;
+            border-radius: 2px;
+            flex-shrink: 0;
+        }
+        tr:hover .site-name { background: #222; }
+        .table-wrapper {
+            overflow-x: auto;
+            overflow-y: auto;
+            width: 100%;
+            height: 100%;
+        }
+        .view-btn {
+            background: linear-gradient(135deg, #2196F3, #0b7dda);
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.85em;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+        .view-btn:hover {
+            background: linear-gradient(135deg, #0b7dda, #0a6bc2);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(33, 150, 243, 0.3);
+        }
+        
+        /* Модальное окно */
+        .modal {
+            display: none;
+            position: fixed !important;
+            z-index: 999999 !important;
+            left: 0 !important;
+            top: 0 !important;
+            right: 0 !important;
+            bottom: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
+            max-width: 100% !important;
+            max-height: 100% !important;
+            min-width: 100% !important;
+            min-height: 100% !important;
+            background-color: #000 !important;
+            animation: fadeIn 0.3s;
+            overflow: hidden !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            box-sizing: border-box !important;
+            transform: none !important;
+        }
+        .modal.active {
+            display: flex !important;
+            align-items: stretch;
+            justify-content: center;
+        }
+        body.modal-open {
+            overflow: hidden !important;
+            position: relative !important;
+            width: 100% !important;
+            height: 100% !important;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        .modal-content {
+            background: #1a1a1a;
+            border-radius: 0;
+            width: 100%;
+            max-width: 430px;
+            height: 100% !important;
+            max-height: 100% !important;
+            min-height: 100% !important;
+            display: flex;
+            flex-direction: column;
+            box-shadow: none;
+            animation: slideUp 0.3s;
+            margin: 0;
+            overflow: hidden;
+            transition: max-width 0.3s ease;
+            box-sizing: border-box;
+            position: relative;
+        }
+        .modal-content.fullscreen {
+            max-width: 100% !important;
+            width: 100% !important;
+        }
+        @keyframes slideUp {
+            from { transform: translateY(50px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        .modal-header {
+            padding: 8px 12px;
+            border-bottom: 2px solid #2a2a2a;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-shrink: 0;
+            background: #1a1a1a;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .modal-title-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .modal-favicon {
+            width: 20px;
+            height: 20px;
+            object-fit: contain;
+            border-radius: 2px;
+        }
+        .modal-header h2 {
+            color: #d4af37;
+            font-size: 0.9em;
+            margin: 0;
+            font-weight: normal;
+        }
+        .modal-header-buttons {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        .fullscreen-btn, .refresh-btn {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.75em;
+            font-weight: normal;
+            transition: all 0.3s;
+        }
+        .fullscreen-btn:hover, .refresh-btn:hover {
+            background: #45a049;
+            transform: scale(1.05);
+        }
+        .fullscreen-btn.active {
+            background: #2196F3;
+        }
+        .fullscreen-btn.active:hover {
+            background: #0b7dda;
+        }
+        .close-btn {
+            background: #f44336;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.75em;
+            font-weight: normal;
+            transition: all 0.3s;
+        }
+        .close-btn:hover {
+            background: #da190b;
+            transform: scale(1.05);
+        }
+        .modal-iframe-container {
+            flex: 1;
+            padding: 0;
+            display: flex;
+            background: #0a0a0a;
+            position: relative;
+            overflow: hidden;
+            min-height: 0;
+        }
+        .mobile-iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            display: block;
+            background: white;
+            flex: 1;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📊 Отчет проверки структуры сайтов</h1>
+        <div class="header-info">
+            <span class="date-info">Дата: 27.11.2025, 00:39:22</span>
+        </div>
+    </div>
+    <div class="content">
+        <div class="table-wrapper">
+        <table>
+        <tr>
+            <th>Сайт</th>
+            <th>Просмотр</th>
+            <th>Контакты</th>
+            <th>Документы</th>
+            <th>Изображения</th>
+            <th>Главная:<br>картинок</th>
+            <th>Favicon</th>
+            <th>Карта</th>
+            <th>Форма</th>
+            <th>Спасибо</th>
+            <th>Тип<br>"Спасибо"</th>
+            <th>Справ. инфо<br>в футере</th>
+            <th>Элементы<br>на страницах</th>
+        </tr><tr>
+            <td class="site-name"><img src="/sites/Ak%C4%B1l%20Oyunlar%C4%B1/images/favicon.jpg" alt="" class="site-favicon" onerror="this.style.display='none'">Akıl Oyunları</td>
+            <td class="stat">
+                <button class="view-btn" onclick="openMobileView('/sites/Ak%C4%B1l%20Oyunlar%C4%B1/light.html', 'Akıl Oyunları', '/sites/Ak%C4%B1l%20Oyunlar%C4%B1/images/favicon.jpg')">📱 Просмотр</button>
+            </td>
+            <td class="stat ok">✓</td>
+            <td class="stat">2</td>
+            <td class="stat">12</td>
+            <td class="stat fail">3</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat">Страница</td>
+            <td class="stat ok">✓</td>
+            <td class="stat" style="text-align: left; font-size: 0.7em; max-width: 400px; white-space: normal; padding: 8px;">
+                <strong>oyunlar.html</strong> - 33<br><strong>reytinq.html</strong> - 7<br><strong>hakkimizda.html</strong> - 29<br><strong>basvuru.html</strong> - 6
+            </td>
+        </tr><tr>
+            <td class="site-name"><img src="/sites/Ak%C4%B1lKulesi/image/favicon.png" alt="" class="site-favicon" onerror="this.style.display='none'">AkılKulesi</td>
+            <td class="stat">
+                <button class="view-btn" onclick="openMobileView('/sites/Ak%C4%B1lKulesi/light.html', 'AkılKulesi', '/sites/Ak%C4%B1lKulesi/image/favicon.png')">📱 Просмотр</button>
+            </td>
+            <td class="stat ok">✓</td>
+            <td class="stat">4</td>
+            <td class="stat">11</td>
+            <td class="stat ok">7</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat">Всплывайка</td>
+            <td class="stat ok">✓</td>
+            <td class="stat" style="text-align: left; font-size: 0.7em; max-width: 400px; white-space: normal; padding: 8px;">
+                <strong>games.html</strong> - 30<br><strong>levels.html</strong> - 20<br><strong>challenges.html</strong> - 21<br><strong>register.html</strong> - 16
+            </td>
+        </tr><tr>
+            <td class="site-name"><img src="/sites/BrainBoost/images/favicon.jpg" alt="" class="site-favicon" onerror="this.style.display='none'">BrainBoost</td>
+            <td class="stat">
+                <button class="view-btn" onclick="openMobileView('/sites/BrainBoost/index.html', 'BrainBoost', '/sites/BrainBoost/images/favicon.jpg')">📱 Просмотр</button>
+            </td>
+            <td class="stat ok">✓</td>
+            <td class="stat">2</td>
+            <td class="stat">15</td>
+            <td class="stat ok">8</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat">Страница</td>
+            <td class="stat ok">✓</td>
+            <td class="stat" style="text-align: left; font-size: 0.7em; max-width: 400px; white-space: normal; padding: 8px;">
+                <strong>oyunlar.html</strong> - 36<br><strong>liderlik-tablosu.html</strong> - 26<br><strong>hakkimizda.html</strong> - 55
+            </td>
+        </tr><tr>
+            <td class="site-name"><img src="/sites/FunnyGames/images/favicon.jpg" alt="" class="site-favicon" onerror="this.style.display='none'">FunnyGames</td>
+            <td class="stat">
+                <button class="view-btn" onclick="openMobileView('/sites/FunnyGames/light.html', 'FunnyGames', '/sites/FunnyGames/images/favicon.jpg')">📱 Просмотр</button>
+            </td>
+            <td class="stat ok">✓</td>
+            <td class="stat">3</td>
+            <td class="stat">15</td>
+            <td class="stat fail">4</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat">Страница</td>
+            <td class="stat ok">✓</td>
+            <td class="stat" style="text-align: left; font-size: 0.7em; max-width: 400px; white-space: normal; padding: 8px;">
+                <strong>oyunlar.html</strong> - 25<br><strong>turnuva.html</strong> - 18<br><strong>hakkimizda.html</strong> - 33<br><strong>erken-erisim.html</strong> - 6
+            </td>
+        </tr><tr>
+            <td class="site-name"><img src="/sites/IQ%20Oyunlar%C4%B1/images/favicon.jpg" alt="" class="site-favicon" onerror="this.style.display='none'">IQ Oyunları</td>
+            <td class="stat">
+                <button class="view-btn" onclick="openMobileView('/sites/IQ%20Oyunlar%C4%B1/light.html', 'IQ Oyunları', '/sites/IQ%20Oyunlar%C4%B1/images/favicon.jpg')">📱 Просмотр</button>
+            </td>
+            <td class="stat ok">✓</td>
+            <td class="stat">2</td>
+            <td class="stat">19</td>
+            <td class="stat ok">8</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat">Страница</td>
+            <td class="stat ok">✓</td>
+            <td class="stat" style="text-align: left; font-size: 0.7em; max-width: 400px; white-space: normal; padding: 8px;">
+                <strong>oyunlar.html</strong> - 20<br><strong>reyting.html</strong> - 8<br><strong>hakkimizda.html</strong> - 12<br><strong>basvuru.html</strong> - 2
+            </td>
+        </tr><tr>
+            <td class="site-name"><img src="/sites/Kraken%20Games/favicon.svg" alt="" class="site-favicon" onerror="this.style.display='none'">Kraken Games</td>
+            <td class="stat">
+                <button class="view-btn" onclick="openMobileView('/sites/Kraken%20Games/light.html', 'Kraken Games', '/sites/Kraken%20Games/favicon.svg')">📱 Просмотр</button>
+            </td>
+            <td class="stat ok">✓</td>
+            <td class="stat">3</td>
+            <td class="stat">35</td>
+            <td class="stat ok">5</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat">Страница</td>
+            <td class="stat ok">✓</td>
+            <td class="stat" style="text-align: left; font-size: 0.7em; max-width: 400px; white-space: normal; padding: 8px;">
+                <strong>hakkimizda.html</strong> - 1<br><strong>oyunlar.html</strong> - 27<br><strong>bonuslar.html</strong> - 13<br><strong>haberler.html</strong> - 18<br><strong>yorumlar.html</strong> - 56
+            </td>
+        </tr><tr>
+            <td class="site-name"><img src="/sites/Logic%20Games/favicon.svg" alt="" class="site-favicon" onerror="this.style.display='none'">Logic Games</td>
+            <td class="stat">
+                <button class="view-btn" onclick="openMobileView('/sites/Logic%20Games/light.html', 'Logic Games', '/sites/Logic%20Games/favicon.svg')">📱 Просмотр</button>
+            </td>
+            <td class="stat ok">✓</td>
+            <td class="stat">3</td>
+            <td class="stat">24</td>
+            <td class="stat fail">4</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat">Страница</td>
+            <td class="stat ok">✓</td>
+            <td class="stat" style="text-align: left; font-size: 0.7em; max-width: 400px; white-space: normal; padding: 8px;">
+                <strong>hakkimizda.html</strong> - 19<br><strong>oyunlar.html</strong> - 13<br><strong>haberler.html</strong> - 14<br><strong>yorumlar.html</strong> - 71
+            </td>
+        </tr><tr>
+            <td class="site-name"><img src="/sites/Logic%20Games2/favicon.svg" alt="" class="site-favicon" onerror="this.style.display='none'">Logic Games2</td>
+            <td class="stat">
+                <button class="view-btn" onclick="openMobileView('/sites/Logic%20Games2/light.html', 'Logic Games2', '/sites/Logic%20Games2/favicon.svg')">📱 Просмотр</button>
+            </td>
+            <td class="stat ok">✓</td>
+            <td class="stat">3</td>
+            <td class="stat">22</td>
+            <td class="stat fail">3</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat">Всплывайка</td>
+            <td class="stat ok">✓</td>
+            <td class="stat" style="text-align: left; font-size: 0.7em; max-width: 400px; white-space: normal; padding: 8px;">
+                <strong>hakkimizda.html</strong> - 10<br><strong>oyunlar.html</strong> - 13<br><strong>haberler.html</strong> - 12<br><strong>yorumlar.html</strong> - 92
+            </td>
+        </tr><tr>
+            <td class="site-name"><img src="/sites/Logic%20Games3/favicon.svg" alt="" class="site-favicon" onerror="this.style.display='none'">Logic Games3</td>
+            <td class="stat">
+                <button class="view-btn" onclick="openMobileView('/sites/Logic%20Games3/light.html', 'Logic Games3', '/sites/Logic%20Games3/favicon.svg')">📱 Просмотр</button>
+            </td>
+            <td class="stat ok">✓</td>
+            <td class="stat">3</td>
+            <td class="stat">23</td>
+            <td class="stat fail">4</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat">Страница</td>
+            <td class="stat ok">✓</td>
+            <td class="stat" style="text-align: left; font-size: 0.7em; max-width: 400px; white-space: normal; padding: 8px;">
+                <strong>hakkimizda.html</strong> - 11<br><strong>oyunlar.html</strong> - 13<br><strong>bonuslar.html</strong> - 5<br><strong>haberler.html</strong> - 12<br><strong>yorumlar.html</strong> - 50
+            </td>
+        </tr><tr>
+            <td class="site-name"><img src="/sites/Logika/favicon.svg" alt="" class="site-favicon" onerror="this.style.display='none'">Logika</td>
+            <td class="stat">
+                <button class="view-btn" onclick="openMobileView('/sites/Logika/light.html', 'Logika', '/sites/Logika/favicon.svg')">📱 Просмотр</button>
+            </td>
+            <td class="stat ok">✓</td>
+            <td class="stat">3</td>
+            <td class="stat">33</td>
+            <td class="stat fail">4</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat">Страница</td>
+            <td class="stat ok">✓</td>
+            <td class="stat" style="text-align: left; font-size: 0.7em; max-width: 400px; white-space: normal; padding: 8px;">
+                <strong>hakkimizda.html</strong> - 28<br><strong>oyunlar.html</strong> - 44<br><strong>bonuslar.html</strong> - 12<br><strong>haberler.html</strong> - 12<br><strong>yorumlar.html</strong> - 67
+            </td>
+        </tr><tr>
+            <td class="site-name"><img src="/sites/logika2/favicon.svg" alt="" class="site-favicon" onerror="this.style.display='none'">logika2</td>
+            <td class="stat">
+                <button class="view-btn" onclick="openMobileView('/sites/logika2/light.html', 'logika2', '/sites/logika2/favicon.svg')">📱 Просмотр</button>
+            </td>
+            <td class="stat ok">✓</td>
+            <td class="stat">3</td>
+            <td class="stat">37</td>
+            <td class="stat ok">5</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat">Страница</td>
+            <td class="stat ok">✓</td>
+            <td class="stat" style="text-align: left; font-size: 0.7em; max-width: 400px; white-space: normal; padding: 8px;">
+                <strong>hakkimizda.html</strong> - 18<br><strong>oyunlar.html</strong> - 19<br><strong>haberler.html</strong> - 18<br><strong>yorumlar.html</strong> - 74
+            </td>
+        </tr><tr>
+            <td class="site-name"><img src="/sites/logika3/favicon.svg" alt="" class="site-favicon" onerror="this.style.display='none'">logika3</td>
+            <td class="stat">
+                <button class="view-btn" onclick="openMobileView('/sites/logika3/light.html', 'logika3', '/sites/logika3/favicon.svg')">📱 Просмотр</button>
+            </td>
+            <td class="stat ok">✓</td>
+            <td class="stat">3</td>
+            <td class="stat">20</td>
+            <td class="stat ok">5</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat">Страница</td>
+            <td class="stat ok">✓</td>
+            <td class="stat" style="text-align: left; font-size: 0.7em; max-width: 400px; white-space: normal; padding: 8px;">
+                <strong>hakkimizda.html</strong> - 79<br><strong>oyunlar.html</strong> - 155<br><strong>bonuslar.html</strong> - 8<br><strong>haberler.html</strong> - 10<br><strong>yorumlar.html</strong> - 14
+            </td>
+        </tr><tr>
+            <td class="site-name"><img src="/sites/Mantik%20Oyunlari/image/hero.jpg" alt="" class="site-favicon" onerror="this.style.display='none'">Mantik Oyunlari</td>
+            <td class="stat">
+                <button class="view-btn" onclick="openMobileView('/sites/Mantik%20Oyunlari/light.html', 'Mantik Oyunlari', '/sites/Mantik%20Oyunlari/image/hero.jpg')">📱 Просмотр</button>
+            </td>
+            <td class="stat ok">✓</td>
+            <td class="stat">3</td>
+            <td class="stat">10</td>
+            <td class="stat fail">4</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat">Страница</td>
+            <td class="stat ok">✓</td>
+            <td class="stat" style="text-align: left; font-size: 0.7em; max-width: 400px; white-space: normal; padding: 8px;">
+                <strong>oyunlar.html</strong> - 20<br><strong>turnuva.html</strong> - 13<br><strong>profil.html</strong> - 32<br><strong>kayit.html</strong> - 10
+            </td>
+        </tr><tr>
+            <td class="site-name"><img src="/sites/Mantik%20Oyunlari%202/image/hero.jpg" alt="" class="site-favicon" onerror="this.style.display='none'">Mantik Oyunlari 2</td>
+            <td class="stat">
+                <button class="view-btn" onclick="openMobileView('/sites/Mantik%20Oyunlari%202/light.html', 'Mantik Oyunlari 2', '/sites/Mantik%20Oyunlari%202/image/hero.jpg')">📱 Просмотр</button>
+            </td>
+            <td class="stat ok">✓</td>
+            <td class="stat">3</td>
+            <td class="stat">14</td>
+            <td class="stat fail">4</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat">Страница</td>
+            <td class="stat ok">✓</td>
+            <td class="stat" style="text-align: left; font-size: 0.7em; max-width: 400px; white-space: normal; padding: 8px;">
+                <strong>games.html</strong> - 13<br><strong>leaderboard.html</strong> - 8<br><strong>register.html</strong> - 7
+            </td>
+        </tr><tr>
+            <td class="site-name"><img src="/sites/MantikOyun/image/hero.webp" alt="" class="site-favicon" onerror="this.style.display='none'">MantikOyun</td>
+            <td class="stat">
+                <button class="view-btn" onclick="openMobileView('/sites/MantikOyun/light.html', 'MantikOyun', '/sites/MantikOyun/image/hero.webp')">📱 Просмотр</button>
+            </td>
+            <td class="stat ok">✓</td>
+            <td class="stat">3</td>
+            <td class="stat">9</td>
+            <td class="stat ok">6</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat fail">✗</td>
+            <td class="stat">-</td>
+            <td class="stat ok">✓</td>
+            <td class="stat" style="text-align: left; font-size: 0.7em; max-width: 400px; white-space: normal; padding: 8px;">
+                <strong>oyunlar.html</strong> - 2<br><strong>puan-tablosu.html</strong> - 5<br><strong>profil.html</strong> - 21<br><strong>hakkimizda.html</strong> - 7
+            </td>
+        </tr><tr>
+            <td class="site-name"><img src="/sites/Mant%C4%B1k%20Oyunlar%C4%B1/images/hero.png" alt="" class="site-favicon" onerror="this.style.display='none'">Mantık Oyunları</td>
+            <td class="stat">
+                <button class="view-btn" onclick="openMobileView('/sites/Mant%C4%B1k%20Oyunlar%C4%B1/light.html', 'Mantık Oyunları', '/sites/Mant%C4%B1k%20Oyunlar%C4%B1/images/hero.png')">📱 Просмотр</button>
+            </td>
+            <td class="stat ok">✓</td>
+            <td class="stat">3</td>
+            <td class="stat">13</td>
+            <td class="stat ok">6</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat">Страница</td>
+            <td class="stat ok">✓</td>
+            <td class="stat" style="text-align: left; font-size: 0.7em; max-width: 400px; white-space: normal; padding: 8px;">
+                <strong>game-world.html</strong> - 8<br><strong>tournaments.html</strong> - 15
+            </td>
+        </tr><tr>
+            <td class="site-name"><img src="/sites/MindGames/images/favicon.jpg" alt="" class="site-favicon" onerror="this.style.display='none'">MindGames</td>
+            <td class="stat">
+                <button class="view-btn" onclick="openMobileView('/sites/MindGames/light.html', 'MindGames', '/sites/MindGames/images/favicon.jpg')">📱 Просмотр</button>
+            </td>
+            <td class="stat ok">✓</td>
+            <td class="stat">2</td>
+            <td class="stat">17</td>
+            <td class="stat ok">5</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat">Страница</td>
+            <td class="stat ok">✓</td>
+            <td class="stat" style="text-align: left; font-size: 0.7em; max-width: 400px; white-space: normal; padding: 8px;">
+                <strong>oyunlar.html</strong> - 11<br><strong>liderlik-tablosu.html</strong> - 15<br><strong>hakkimizda.html</strong> - 18<br><strong>erken-erisim.html</strong> - 8
+            </td>
+        </tr><tr>
+            <td class="site-name"><img src="/sites/Oyunlari/image/hero.jpg" alt="" class="site-favicon" onerror="this.style.display='none'">Oyunlari</td>
+            <td class="stat">
+                <button class="view-btn" onclick="openMobileView('/sites/Oyunlari/light.html', 'Oyunlari', '/sites/Oyunlari/image/hero.jpg')">📱 Просмотр</button>
+            </td>
+            <td class="stat ok">✓</td>
+            <td class="stat">3</td>
+            <td class="stat">11</td>
+            <td class="stat fail">4</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat">Страница</td>
+            <td class="stat ok">✓</td>
+            <td class="stat" style="text-align: left; font-size: 0.7em; max-width: 400px; white-space: normal; padding: 8px;">
+                <strong>games.html</strong> - 11<br><strong>leaderboard.html</strong> - 24<br><strong>profile.html</strong> - 15
+            </td>
+        </tr><tr>
+            <td class="site-name"><img src="/sites/ProcessMind%20USA/image/favicon.jpeg" alt="" class="site-favicon" onerror="this.style.display='none'">ProcessMind USA</td>
+            <td class="stat">
+                <button class="view-btn" onclick="openMobileView('/sites/ProcessMind%20USA/index.html', 'ProcessMind USA', '/sites/ProcessMind%20USA/image/favicon.jpeg')">📱 Просмотр</button>
+            </td>
+            <td class="stat ok">✓</td>
+            <td class="stat">2</td>
+            <td class="stat">17</td>
+            <td class="stat ok">12</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat">Страница</td>
+            <td class="stat ok">✓</td>
+            <td class="stat" style="text-align: left; font-size: 0.7em; max-width: 400px; white-space: normal; padding: 8px;">
+                <strong>processes.html</strong> - 13<br><strong>automation.html</strong> - 9<br><strong>cases.html</strong> - 18
+            </td>
+        </tr><tr>
+            <td class="site-name"><img src="/sites/Sea%20Games/favicon.svg" alt="" class="site-favicon" onerror="this.style.display='none'">Sea Games</td>
+            <td class="stat">
+                <button class="view-btn" onclick="openMobileView('/sites/Sea%20Games/light.html', 'Sea Games', '/sites/Sea%20Games/favicon.svg')">📱 Просмотр</button>
+            </td>
+            <td class="stat ok">✓</td>
+            <td class="stat">3</td>
+            <td class="stat">19</td>
+            <td class="stat fail">3</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat">Страница</td>
+            <td class="stat ok">✓</td>
+            <td class="stat" style="text-align: left; font-size: 0.7em; max-width: 400px; white-space: normal; padding: 8px;">
+                <strong>hakkimizda.html</strong> - 24<br><strong>oyunlar.html</strong> - 19<br><strong>bonuslar.html</strong> - 13<br><strong>haberler.html</strong> - 12<br><strong>yorumlar.html</strong> - 9
+            </td>
+        </tr><tr>
+            <td class="site-name"><img src="/sites/Zeka%20D%C3%BCnyas%C4%B1/images/hero.png" alt="" class="site-favicon" onerror="this.style.display='none'">Zeka Dünyası</td>
+            <td class="stat">
+                <button class="view-btn" onclick="openMobileView('/sites/Zeka%20D%C3%BCnyas%C4%B1/light.html', 'Zeka Dünyası', '/sites/Zeka%20D%C3%BCnyas%C4%B1/images/hero.png')">📱 Просмотр</button>
+            </td>
+            <td class="stat ok">✓</td>
+            <td class="stat">3</td>
+            <td class="stat">14</td>
+            <td class="stat ok">6</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat">Страница</td>
+            <td class="stat ok">✓</td>
+            <td class="stat" style="text-align: left; font-size: 0.7em; max-width: 400px; white-space: normal; padding: 8px;">
+                <strong>game-world.html</strong> - 10<br><strong>research.html</strong> - 40<br><strong>tournaments.html</strong> - 11
+            </td>
+        </tr><tr>
+            <td class="site-name"><img src="/sites/Zeka%20Oyunlar%C4%B1/images/hero.png" alt="" class="site-favicon" onerror="this.style.display='none'">Zeka Oyunları</td>
+            <td class="stat">
+                <button class="view-btn" onclick="openMobileView('/sites/Zeka%20Oyunlar%C4%B1/light.html', 'Zeka Oyunları', '/sites/Zeka%20Oyunlar%C4%B1/images/hero.png')">📱 Просмотр</button>
+            </td>
+            <td class="stat ok">✓</td>
+            <td class="stat">0</td>
+            <td class="stat">12</td>
+            <td class="stat ok">5</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat">Страница</td>
+            <td class="stat ok">✓</td>
+            <td class="stat" style="text-align: left; font-size: 0.7em; max-width: 400px; white-space: normal; padding: 8px;">
+                <strong>games.html</strong> - 16<br><strong>tournaments.html</strong> - 10
+            </td>
+        </tr><tr>
+            <td class="site-name"><img src="/sites/Zeka%20Platformu/images/1.jpeg" alt="" class="site-favicon" onerror="this.style.display='none'">Zeka Platformu</td>
+            <td class="stat">
+                <button class="view-btn" onclick="openMobileView('/sites/Zeka%20Platformu/light.html', 'Zeka Platformu', '/sites/Zeka%20Platformu/images/1.jpeg')">📱 Просмотр</button>
+            </td>
+            <td class="stat ok">✓</td>
+            <td class="stat">3</td>
+            <td class="stat">11</td>
+            <td class="stat fail">4</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat">Страница</td>
+            <td class="stat fail">✗</td>
+            <td class="stat" style="text-align: left; font-size: 0.7em; max-width: 400px; white-space: normal; padding: 8px;">
+                <strong>game-world.html</strong> - 13<br><strong>tournaments.html</strong> - 14
+            </td>
+        </tr><tr>
+            <td class="site-name"><img src="/sites/ZekaD%C3%BCnyas%C4%B1/image/favicon.png" alt="" class="site-favicon" onerror="this.style.display='none'">ZekaDünyası</td>
+            <td class="stat">
+                <button class="view-btn" onclick="openMobileView('/sites/ZekaD%C3%BCnyas%C4%B1/light.html', 'ZekaDünyası', '/sites/ZekaD%C3%BCnyas%C4%B1/image/favicon.png')">📱 Просмотр</button>
+            </td>
+            <td class="stat ok">✓</td>
+            <td class="stat">4</td>
+            <td class="stat">19</td>
+            <td class="stat ok">7</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat fail">✗</td>
+            <td class="stat">-</td>
+            <td class="stat ok">✓</td>
+            <td class="stat" style="text-align: left; font-size: 0.7em; max-width: 400px; white-space: normal; padding: 8px;">
+                <strong>games.html</strong> - 21<br><strong>rankings.html</strong> - 12<br><strong>challenges.html</strong> - 18<br><strong>register.html</strong> - 9
+            </td>
+        </tr><tr>
+            <td class="site-name"><img src="/sites/ZekaD%C3%BCnyas%C4%B12/images/hero.png" alt="" class="site-favicon" onerror="this.style.display='none'">ZekaDünyası2</td>
+            <td class="stat">
+                <button class="view-btn" onclick="openMobileView('/sites/ZekaD%C3%BCnyas%C4%B12/light.html', 'ZekaDünyası2', '/sites/ZekaD%C3%BCnyas%C4%B12/images/hero.png')">📱 Просмотр</button>
+            </td>
+            <td class="stat ok">✓</td>
+            <td class="stat">0</td>
+            <td class="stat">21</td>
+            <td class="stat ok">7</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat">Страница</td>
+            <td class="stat ok">✓</td>
+            <td class="stat" style="text-align: left; font-size: 0.7em; max-width: 400px; white-space: normal; padding: 8px;">
+                <strong>game-world.html</strong> - 18<br><strong>gallery.html</strong> - 26<br><strong>tournaments.html</strong> - 13
+            </td>
+        </tr><tr>
+            <td class="site-name"><img src="/sites/ZekaD%C3%BCnyass/images/hero.png" alt="" class="site-favicon" onerror="this.style.display='none'">ZekaDünyass</td>
+            <td class="stat">
+                <button class="view-btn" onclick="openMobileView('/sites/ZekaD%C3%BCnyass/light.html', 'ZekaDünyass', '/sites/ZekaD%C3%BCnyass/images/hero.png')">📱 Просмотр</button>
+            </td>
+            <td class="stat ok">✓</td>
+            <td class="stat">0</td>
+            <td class="stat">12</td>
+            <td class="stat ok">6</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat">Страница</td>
+            <td class="stat ok">✓</td>
+            <td class="stat" style="text-align: left; font-size: 0.7em; max-width: 400px; white-space: normal; padding: 8px;">
+                <strong>game-world.html</strong> - 8<br><strong>tournaments.html</strong> - 6
+            </td>
+        </tr><tr>
+            <td class="site-name"><img src="/sites/ZekaOyunlar%C4%B1/images/hero.png" alt="" class="site-favicon" onerror="this.style.display='none'">ZekaOyunları</td>
+            <td class="stat">
+                <button class="view-btn" onclick="openMobileView('/sites/ZekaOyunlar%C4%B1/light.html', 'ZekaOyunları', '/sites/ZekaOyunlar%C4%B1/images/hero.png')">📱 Просмотр</button>
+            </td>
+            <td class="stat ok">✓</td>
+            <td class="stat">0</td>
+            <td class="stat">18</td>
+            <td class="stat ok">6</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat ok">✓</td>
+            <td class="stat">Страница</td>
+            <td class="stat ok">✓</td>
+            <td class="stat" style="text-align: left; font-size: 0.7em; max-width: 400px; white-space: normal; padding: 8px;">
+                <strong>games.html</strong> - 17<br><strong>gallery.html</strong> - 6<br><strong>tournaments.html</strong> - 8
+            </td>
+        </tr></table></div></div>
+    
+    <!-- Модальное окно для мобильного просмотра -->
+    <div id="mobileModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title-wrapper">
+                    <img id="modalFavicon" class="modal-favicon" src="" alt="" style="display: none;">
+                    <h2 id="modalTitle"></h2>
+                </div>
+                <div class="modal-header-buttons">
+                    <button class="refresh-btn" onclick="refreshMobileView()">🔄 Обновить</button>
+                    <button class="fullscreen-btn" id="fullscreenBtn" onclick="toggleFullscreen()">💻 ПК вид</button>
+                    <button class="close-btn" onclick="closeMobileView()">✕ Закрыть</button>
+                </div>
+            </div>
+            <div class="modal-iframe-container">
+                <iframe id="mobileIframe" class="mobile-iframe" src="" frameborder="0"></iframe>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        function openMobileView(sitePath, siteName, faviconPath) {
+            // Проверяем, находимся ли мы внутри iframe
+            const isInIframe = window.self !== window.top;
+            
+            if (isInIframe) {
+                // Если внутри iframe, отправляем сообщение родительскому окну
+                try {
+                    window.parent.postMessage({
+                        type: 'openMobileView',
+                        sitePath: sitePath,
+                        siteName: siteName,
+                        faviconPath: faviconPath || ''
+                    }, '*');
+                    return;
+                } catch (e) {
+                    console.error('Не удалось открыть в родительском окне:', e);
+                }
+            }
+            
+            // Если не в iframe или не удалось открыть в родительском окне, открываем локально
+            const modal = document.getElementById('mobileModal');
+            const modalContent = document.querySelector('.modal-content');
+            const iframe = document.getElementById('mobileIframe');
+            const title = document.getElementById('modalTitle');
+            const favicon = document.getElementById('modalFavicon');
+            const fullscreenBtn = document.getElementById('fullscreenBtn');
+            const content = document.querySelector('.content');
+            
+            // Устанавливаем заголовок
+            title.textContent = siteName;
+            
+            // Устанавливаем favicon
+            if (faviconPath && favicon) {
+                favicon.src = faviconPath;
+                favicon.style.display = 'block';
+                favicon.onerror = function() {
+                    console.log('Favicon не загрузился:', faviconPath);
+                    favicon.style.display = 'none';
+                };
+                favicon.onload = function() {
+                    console.log('Favicon загружен:', faviconPath);
+                };
+            } else if (favicon) {
+                favicon.style.display = 'none';
+            }
+            
+            // Устанавливаем путь к сайту
+            iframe.src = sitePath;
+            
+            // Сбрасываем полноэкранный режим при открытии
+            modalContent.classList.remove('fullscreen');
+            fullscreenBtn.classList.remove('active');
+            fullscreenBtn.textContent = '💻 ПК вид';
+            
+            // Блокируем прокрутку всех контейнеров
+            document.documentElement.style.overflow = 'hidden';
+            document.documentElement.style.height = '100%';
+            document.body.classList.add('modal-open');
+            document.body.style.overflow = 'hidden';
+            document.body.style.position = 'fixed';
+            document.body.style.width = '100%';
+            document.body.style.height = '100%';
+            document.body.style.top = '0';
+            document.body.style.left = '0';
+            if (content) {
+                content.classList.add('modal-open');
+                content.style.overflow = 'hidden';
+            }
+            
+            // Показываем модальное окно
+            modal.classList.add('active');
+        }
+        
+        function refreshMobileView() {
+            const iframe = document.getElementById('mobileIframe');
+            if (iframe && iframe.src) {
+                const currentSrc = iframe.src;
+                iframe.src = '';
+                setTimeout(() => {
+                    iframe.src = currentSrc;
+                }, 100);
+            }
+        }
+        
+        function toggleFullscreen() {
+            const modalContent = document.querySelector('.modal-content');
+            const fullscreenBtn = document.getElementById('fullscreenBtn');
+            
+            if (modalContent.classList.contains('fullscreen')) {
+                // Выходим из полноэкранного режима
+                modalContent.classList.remove('fullscreen');
+                fullscreenBtn.classList.remove('active');
+                fullscreenBtn.textContent = '💻 ПК вид';
+            } else {
+                // Входим в полноэкранный режим
+                modalContent.classList.add('fullscreen');
+                fullscreenBtn.classList.add('active');
+                fullscreenBtn.textContent = '📱 Мобильный вид';
+            }
+        }
+        
+        function closeMobileView() {
+            const modal = document.getElementById('mobileModal');
+            const modalContent = document.querySelector('.modal-content');
+            const iframe = document.getElementById('mobileIframe');
+            const fullscreenBtn = document.getElementById('fullscreenBtn');
+            const content = document.querySelector('.content');
+            
+            // Скрываем модальное окно
+            modal.classList.remove('active');
+            
+            // Сбрасываем полноэкранный режим
+            modalContent.classList.remove('fullscreen');
+            fullscreenBtn.classList.remove('active');
+            fullscreenBtn.textContent = '💻 ПК вид';
+            
+            // Очищаем iframe
+            iframe.src = '';
+            
+            // Разблокируем прокрутку всех контейнеров
+            document.documentElement.style.overflow = '';
+            document.documentElement.style.height = '';
+            document.body.classList.remove('modal-open');
+            document.body.style.overflow = '';
+            document.body.style.position = '';
+            document.body.style.width = '';
+            document.body.style.height = '';
+            document.body.style.top = '';
+            document.body.style.left = '';
+            if (content) {
+                content.classList.remove('modal-open');
+                content.style.overflow = '';
+            }
+        }
+        
+        // Закрытие по клику вне модального окна
+        document.getElementById('mobileModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeMobileView();
+            }
+        });
+        
+        // Закрытие по клавише Escape
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeMobileView();
+            }
+        });
+    </script>
+</body></html>
