@@ -1,8 +1,35 @@
 const express = require('express');
 const path = require('path');
 const fs = require('fs').promises;
+const os = require('os');
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
+
+// Проверка, работает ли код на сервере (Vercel, Heroku и т.д.)
+const isServerEnvironment = process.env.VERCEL || process.env.NOW_REGION || process.env.HEROKU_APP_NAME;
+
+// Функция для проверки, является ли путь абсолютным Windows-путём
+function isWindowsAbsolutePath(p) {
+    return /^[A-Za-z]:[\\/]/.test(p);
+}
+
+// Функция для безопасной обработки пути на сервере
+function safeResolvePath(inputPath, fallbackDir = __dirname) {
+    // Если путь не указан, используем fallback
+    if (!inputPath || inputPath.trim() === '') {
+        return fallbackDir;
+    }
+    
+    // Если мы на сервере и путь абсолютный Windows-путь, используем только имя папки
+    if (isServerEnvironment && isWindowsAbsolutePath(inputPath)) {
+        // Извлекаем только имя папки из пути (например, '25' из 'C:\Users\...\25')
+        const folderName = path.basename(inputPath);
+        return path.join(fallbackDir, folderName);
+    }
+    
+    // Для локального окружения или относительных путей - нормализуем как обычно
+    return path.normalize(path.resolve(inputPath));
+}
 
 app.use(express.json());
 
@@ -70,11 +97,12 @@ app.get('/api/sites', async (req, res) => {
 app.post('/api/analyze', async (req, res) => {
     try {
         const { folderPath } = req.body;
-        const targetPath = folderPath || __dirname;
+        
+        // Безопасно обрабатываем путь (на сервере Windows-пути не работают)
+        const targetPath = safeResolvePath(folderPath, __dirname);
         
         // Сохраняем базовый путь для использования в других маршрутах
-        // Нормализуем путь для правильной работы на Windows
-        currentBasePath = path.normalize(path.resolve(targetPath));
+        currentBasePath = targetPath;
         
         // Используем Node.js скрипт вместо PowerShell
         const { checkSites, generateReport } = require('./check_sites_node.js');
@@ -82,17 +110,14 @@ app.post('/api/analyze', async (req, res) => {
         // Выполняем проверку
         const results = await checkSites(targetPath);
         
-        // Генерируем отчет
-        // Нормализуем путь для правильной работы на Windows
-        const normalizedTargetPath = path.normalize(path.resolve(targetPath));
-        const reportPath = path.join(normalizedTargetPath, 'structure_report.html');
-        const stats = await generateReport(results, reportPath, normalizedTargetPath);
+        // Генерируем отчет - всегда используем рабочую директорию сервера
+        const reportPath = path.join(targetPath, 'structure_report.html');
+        const stats = await generateReport(results, reportPath, targetPath);
         
         // Читаем отчет для отправки
         let report = '';
         try {
-            const normalizedReportPath = path.normalize(reportPath);
-            report = await fs.readFile(normalizedReportPath, 'utf8');
+            report = await fs.readFile(reportPath, 'utf8');
         } catch (e) {
             console.error('Error reading report:', e);
             report = '<p>Отчет еще не создан. Ошибка: ' + e.message + '</p>';
@@ -129,20 +154,18 @@ app.post('/api/analyze', async (req, res) => {
 app.get('/api/report', async (req, res) => {
     try {
         // Используем сохраненный базовый путь или путь из query параметра
-        const basePath = req.query.basePath ? decodeURIComponent(req.query.basePath) : currentBasePath;
-        // Нормализуем путь для правильной работы на Windows
-        const normalizedBasePath = path.normalize(path.resolve(basePath));
-        const reportPath = path.join(normalizedBasePath, 'structure_report.html');
-        const normalizedReportPath = path.normalize(reportPath);
+        const basePathInput = req.query.basePath ? decodeURIComponent(req.query.basePath) : currentBasePath;
+        const basePath = safeResolvePath(basePathInput, currentBasePath);
+        const reportPath = path.join(basePath, 'structure_report.html');
         
         // Проверяем существование файла перед чтением
         try {
-            await fs.access(normalizedReportPath);
+            await fs.access(reportPath);
         } catch (accessError) {
             return res.status(404).send('<p>Отчет не найден. Запустите анализ сначала.</p>');
         }
         
-        const report = await fs.readFile(normalizedReportPath, 'utf8');
+        const report = await fs.readFile(reportPath, 'utf8');
         res.send(report);
     } catch (error) {
         console.error('Error reading report:', error);
@@ -151,7 +174,12 @@ app.get('/api/report', async (req, res) => {
 });
 
 app.listen(PORT, () => {
-    console.log(`🚀 Сервер запущен на http://localhost:${PORT}`);
-    console.log(`📁 Откройте браузер и перейдите по адресу выше`);
+    console.log(`🚀 Сервер запущен на порту ${PORT}`);
+    if (!isServerEnvironment) {
+        console.log(`📁 Откройте браузер и перейдите по адресу: http://localhost:${PORT}`);
+    } else {
+        console.log(`📁 Сервер работает в продакшн режиме`);
+    }
+    console.log(`💡 ОС: ${process.platform}, Рабочая директория: ${process.cwd()}`);
 });
 

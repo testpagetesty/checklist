@@ -1528,7 +1528,7 @@ async function generateReport(results, outputPath, basePath) {
     const currentDate = new Date().toLocaleString('ru-RU');
     
     // Нормализуем путь для правильной работы на Windows
-    const normalizedOutputPath = path.normalize(outputPath);
+    let normalizedOutputPath = path.normalize(outputPath);
     
     // Получаем базовый путь для относительных URL
     const reportDir = path.dirname(normalizedOutputPath);
@@ -2138,17 +2138,47 @@ async function generateReport(results, outputPath, basePath) {
 </body></html>`;
     
     // Убеждаемся, что директория существует перед записью файла
+    let fileWritten = false;
+    
     try {
-        await fs.mkdir(reportDir, { recursive: true });
+        // Проверяем, не является ли путь абсолютным Windows-путём на Unix-системе
+        const isWindowsPath = /^[A-Za-z]:[\\/]/.test(reportDir);
+        const isUnixSystem = process.platform !== 'win32';
+        
+        if (isWindowsPath && isUnixSystem) {
+            // Если путь Windows, а система Unix - используем рабочую директорию
+            const safeReportDir = process.cwd();
+            const safeOutputPath = path.join(safeReportDir, path.basename(normalizedOutputPath));
+            await fs.mkdir(safeReportDir, { recursive: true });
+            await fs.writeFile(safeOutputPath, html, 'utf8');
+            // Обновляем normalizedOutputPath для дальнейшего использования
+            normalizedOutputPath = safeOutputPath;
+            fileWritten = true;
+        } else {
+            // Обычная обработка для совместимых путей
+            await fs.mkdir(reportDir, { recursive: true });
+        }
     } catch (err) {
         // Если директория уже существует, это нормально
         if (err.code !== 'EEXIST') {
-            throw err;
+            // На сервере может быть проблема с абсолютными Windows-путями
+            // Попробуем сохранить в рабочую директорию
+            if (err.code === 'ENOENT' && process.platform !== 'win32') {
+                console.warn(`Warning: Cannot create directory ${reportDir}, saving to working directory instead`);
+                const safeOutputPath = path.join(process.cwd(), path.basename(normalizedOutputPath));
+                await fs.writeFile(safeOutputPath, html, 'utf8');
+                normalizedOutputPath = safeOutputPath;
+                fileWritten = true;
+            } else {
+                throw err;
+            }
         }
     }
     
-    // Записываем файл используя нормализованный путь
-    await fs.writeFile(normalizedOutputPath, html, 'utf8');
+    // Записываем файл только если он еще не был записан
+    if (!fileWritten) {
+        await fs.writeFile(normalizedOutputPath, html, 'utf8');
+    }
     
     // Статистика для консоли
     const existing = results.filter(r => r.Exists).length;
