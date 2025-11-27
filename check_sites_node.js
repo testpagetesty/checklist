@@ -1524,8 +1524,12 @@ async function checkSites(basePath) {
     return results;
 }
 
-async function generateReport(results, outputPath, basePath) {
+async function generateReport(results, outputPath, basePath, skipFileWrite = false) {
     const currentDate = new Date().toLocaleString('ru-RU');
+    
+    // Проверяем, работаем ли на read-only файловой системе (Vercel, serverless)
+    const isReadOnlyFS = process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || 
+                         (skipFileWrite === true);
     
     // Нормализуем путь для правильной работы на Windows
     let normalizedOutputPath = path.normalize(outputPath);
@@ -2137,47 +2141,76 @@ async function generateReport(results, outputPath, basePath) {
     </script>
 </body></html>`;
     
-    // Убеждаемся, что директория существует перед записью файла
+    // Пытаемся записать файл только если не на read-only файловой системе
     let fileWritten = false;
+    let actualReportPath = normalizedOutputPath;
     
-    try {
-        // Проверяем, не является ли путь абсолютным Windows-путём на Unix-системе
-        const isWindowsPath = /^[A-Za-z]:[\\/]/.test(reportDir);
-        const isUnixSystem = process.platform !== 'win32';
-        
-        if (isWindowsPath && isUnixSystem) {
-            // Если путь Windows, а система Unix - используем рабочую директорию
-            const safeReportDir = process.cwd();
-            const safeOutputPath = path.join(safeReportDir, path.basename(normalizedOutputPath));
-            await fs.mkdir(safeReportDir, { recursive: true });
-            await fs.writeFile(safeOutputPath, html, 'utf8');
-            // Обновляем normalizedOutputPath для дальнейшего использования
-            normalizedOutputPath = safeOutputPath;
-            fileWritten = true;
-        } else {
-            // Обычная обработка для совместимых путей
-            await fs.mkdir(reportDir, { recursive: true });
-        }
-    } catch (err) {
-        // Если директория уже существует, это нормально
-        if (err.code !== 'EEXIST') {
-            // На сервере может быть проблема с абсолютными Windows-путями
-            // Попробуем сохранить в рабочую директорию
-            if (err.code === 'ENOENT' && process.platform !== 'win32') {
-                console.warn(`Warning: Cannot create directory ${reportDir}, saving to working directory instead`);
-                const safeOutputPath = path.join(process.cwd(), path.basename(normalizedOutputPath));
-                await fs.writeFile(safeOutputPath, html, 'utf8');
-                normalizedOutputPath = safeOutputPath;
-                fileWritten = true;
+    if (!isReadOnlyFS) {
+        try {
+            // Проверяем, не является ли путь абсолютным Windows-путём на Unix-системе
+            const isWindowsPath = /^[A-Za-z]:[\\/]/.test(reportDir);
+            const isUnixSystem = process.platform !== 'win32';
+            
+            if (isWindowsPath && isUnixSystem) {
+                // Если путь Windows, а система Unix - пробуем использовать /tmp
+                try {
+                    const tmpDir = '/tmp';
+                    const safeOutputPath = path.join(tmpDir, path.basename(normalizedOutputPath));
+                    await fs.mkdir(tmpDir, { recursive: true });
+                    await fs.writeFile(safeOutputPath, html, 'utf8');
+                    actualReportPath = safeOutputPath;
+                    fileWritten = true;
+                } catch (tmpErr) {
+                    console.warn(`Warning: Cannot write to /tmp, will skip file write: ${tmpErr.message}`);
+                    // На Vercel даже /tmp может не работать, просто пропускаем запись
+                }
             } else {
-                throw err;
+                // Обычная обработка для совместимых путей
+                try {
+                    await fs.mkdir(reportDir, { recursive: true });
+                    await fs.writeFile(normalizedOutputPath, html, 'utf8');
+                    fileWritten = true;
+                } catch (writeErr) {
+                    // Если ошибка записи (read-only FS), просто пропускаем
+                    if (writeErr.code === 'EROFS' || writeErr.code === 'EACCES') {
+                        console.warn(`Warning: Read-only file system, skipping file write: ${writeErr.message}`);
+                    } else {
+                        throw writeErr;
+                    }
+                }
+            }
+        } catch (err) {
+            // Если директория уже существует, это нормально
+            if (err.code === 'EEXIST') {
+                try {
+                    await fs.writeFile(normalizedOutputPath, html, 'utf8');
+                    fileWritten = true;
+                } catch (writeErr) {
+                    if (writeErr.code === 'EROFS' || writeErr.code === 'EACCES') {
+                        console.warn(`Warning: Read-only file system, skipping file write: ${writeErr.message}`);
+                    } else {
+                        throw writeErr;
+                    }
+                }
+            } else if (err.code === 'EROFS' || err.code === 'EACCES') {
+                // Read-only файловая система - просто пропускаем запись
+                console.warn(`Warning: Read-only file system detected, skipping file write`);
+            } else {
+                // Другие ошибки - пробуем /tmp
+                try {
+                    const tmpDir = '/tmp';
+                    const safeOutputPath = path.join(tmpDir, path.basename(normalizedOutputPath));
+                    await fs.mkdir(tmpDir, { recursive: true });
+                    await fs.writeFile(safeOutputPath, html, 'utf8');
+                    actualReportPath = safeOutputPath;
+                    fileWritten = true;
+                } catch (tmpErr) {
+                    console.warn(`Warning: Cannot write file, will skip: ${tmpErr.message}`);
+                }
             }
         }
-    }
-    
-    // Записываем файл только если он еще не был записан
-    if (!fileWritten) {
-        await fs.writeFile(normalizedOutputPath, html, 'utf8');
+    } else {
+        console.log('Skipping file write - read-only file system detected');
     }
     
     // Статистика для консоли
@@ -2202,7 +2235,10 @@ async function generateReport(results, outputPath, basePath) {
         withMainPageImages5,
         withMap,
         withForm,
-        output: `Total sites: ${results.length}\nExisting: ${existing}\nWith main page: ${withMain}\nWith contact page: ${withContact}\nWith favicon: ${withFavicon}\nWith thank you page: ${withThankYou}\nWith ≥5 images (total): ${withImages5}\nWith ≥5 images on main page: ${withMainPageImages5}\nWith contact map: ${withMap}\nWith contact form: ${withForm}`
+        html: html, // Возвращаем HTML напрямую для использования через API
+        output: `Total sites: ${results.length}\nExisting: ${existing}\nWith main page: ${withMain}\nWith contact page: ${withContact}\nWith favicon: ${withFavicon}\nWith thank you page: ${withThankYou}\nWith ≥5 images (total): ${withImages5}\nWith ≥5 images on main page: ${withMainPageImages5}\nWith contact map: ${withMap}\nWith contact form: ${withForm}`,
+        fileWritten: fileWritten,
+        reportPath: actualReportPath
     };
 }
 
